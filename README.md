@@ -8,5 +8,5 @@
 ---
 
 Полезные статьи
-* https://github.com/ssloy/tinyrenderer/wiki/Lesson-0:-getting-started - TinyRenderer/n
+* https://github.com/ssloy/tinyrenderer/wiki/Lesson-0:-getting-started - TinyRenderer
 * https://habr.com/ru/post/248153/ - Краткий курс компьютерной графики: пишем упрощённый OpenGL своими руками
