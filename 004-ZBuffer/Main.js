@@ -1,33 +1,57 @@
 const WIDTH = 800;
 const HEIGHT = 800;
 const ZOOM = 1;
-let drawer = new Drawer("MyCanvas", WIDTH, HEIGHT, ZOOM);
-drawer.SetColor(30, 30, 30);
-drawer.Clear();
-drawer.SetColor(200, 0, 0);
-drawer.AddPoint(0, 0);
-drawer.SetColor(0, 200, 0);
-drawer.AddPoint(99, 0);
-drawer.SetColor(0, 0, 200);
-drawer.AddPoint(0, 99);
-//let t0 = performance.now();
-//let t1 = performance.now();
-//console.log("Call AddLine took " + (t1 - t0) + " ms.");
-
-ReadTextFile("ball.obj", DrawObject);
-
-//drawer.SetUpdate(Update);
-//drawer.StartAnimating();
-//drawer.SetFpsLimit(60);
-
-let xAnim = 0;
-let dxAnim = 1;
+const IS_READ_FILE = 1;
+const IS_ANIM = 1;
 
 let vArrayAnim;
 let fArrayAnim;
 let alpha = 0;
 let colors = [];
 
+let zBuffer = new Array(WIDTH * HEIGHT);
+ClearZBuffer();
+
+const drawer = new Drawer("MyCanvas", WIDTH, HEIGHT, ZOOM);
+//let t0 = performance.now();
+//let t1 = performance.now();
+//console.log("Call AddLine took " + (t1 - t0) + " ms.");
+
+if (IS_READ_FILE > 0) {
+    ReadTextFile("dog.obj", DrawObject);
+}
+else {
+    drawer.SetColor(30, 30, 30);
+    drawer.Clear();
+    drawer.SetColor(200, 0, 0);
+    let a = new Vector3(100, 100, 0);
+    let b = new Vector3(700, 200, 0);
+    let c = new Vector3(400, 600, 0);
+
+    let t0 = performance.now();
+    for (let index = 0; index < 1000; index++) {
+        FillTriangleBary(a, b, c);        
+    }    
+    let t1 = performance.now();
+    
+    let t2 = performance.now();
+    for (let index = 0; index < 1000; index++) {
+        FillTriangle(a, b, c);        
+    }
+    let t3 = performance.now();
+
+    console.log("Call FillTriangleBary took " + (t1 - t0) + " ms.");
+    console.log("Call FillTriangle took " + (t3 - t2) + " ms.");
+    drawer.SetColor(200, 200, 0);
+    AddTriangle(a.x, a.y, b.x, b.y, c.x, c.y);
+    drawer.Show();
+}
+
+function ClearZBuffer() {
+    for (let index = 0; index < zBuffer.length; index++) {
+        zBuffer[index] = -Infinity;        
+    }
+}
 
 function DrawObject(vArray, fArray) {
     vArrayAnim = vArray;
@@ -35,12 +59,19 @@ function DrawObject(vArray, fArray) {
     for (let i = 0; i < fArrayAnim.length; i++) {
         colors.push(new Color(GetRandomInteger(255), GetRandomInteger(255), GetRandomInteger(255)));
     }
-    drawer.SetUpdate(Update);
-    drawer.SetFpsLimit(30);
-    drawer.StartAnimating();
+
+    if (IS_ANIM) {
+        drawer.SetUpdate(Update);
+        drawer.SetFpsLimit(30);
+        drawer.StartAnimating();
+    }
+    else {
+        Update();
+    }
 }
 
 function Update() {
+    ClearZBuffer();
     drawer.SetColor(30, 30, 30);
     drawer.Clear();
     drawer.SetColor(200, 0, 0);
@@ -57,20 +88,26 @@ function Update() {
 
         let x0 = Math.round(point1.x * objZoom + dx);
         let y0 = Math.round(point1.y * objZoom + dy);
+        let z0 = Math.round(point1.z * objZoom);
         let x1 = Math.round(point2.x * objZoom + dx);
         let y1 = Math.round(point2.y * objZoom + dy);
+        let z1 = Math.round(point2.z * objZoom);
         let x2 = Math.round(point3.x * objZoom + dx);
         let y2 = Math.round(point3.y * objZoom + dy);
+        let z2 = Math.round(point3.z * objZoom);
 
         let vec1 = new Vector3(point2.x - point1.x, point2.y - point1.y, point2.z - point1.z);
         let vec2 = new Vector3(point3.x - point1.x, point3.y - point1.y, point3.z - point1.z);
         let n = VecCross(vec1, vec2);
         n = Normalize(n);
-        let lightDir = new Vector3(0, 0, 1);
-        let intensity = VecDot(n, lightDir);
+        let minusLightDir = new Vector3(0, 0, 1);
+        let intensity = VecDot(n, minusLightDir);
         if (intensity > 0) {
             drawer.SetColor(intensity * 255, intensity * 255, intensity * 255);
-            FillTriangle(x0, y0, x1, y1, x2, y2);
+            let a = new Vector3(x0, y0, z0);
+            let b = new Vector3(x1, y1, z1);
+            let c = new Vector3(x2, y2, z2);
+            FillTriangle(a, b, c);
         }        
     }
 
@@ -82,12 +119,28 @@ function Update() {
     }
 }
 
+function Barycentric(a, b, c, p) {
+    let ab = new Vector3(b.x - a.x, b.y - a.y, b.z - a.z);
+    let ac = new Vector3(c.x - a.x, c.y - a.y, c.z - a.z);
+    let pa = new Vector3(a.x - p.x, a.y - p.y, a.z - p.z);
+
+    let v1 = new Vector3(ab.x, ac.x, pa.x);
+    let v2 = new Vector3(ab.y, ac.y, pa.y);
+    let v3 = VecCross(v1, v2);
+    if (v3.z == 0) {
+        return null;
+    }
+    let u = v3.x / v3.z;
+    let v = v3.y / v3.z;
+    return [1 - u - v, u, v];
+}
+
 function VecDot(v1, v2) {
     return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
 }
 
 function VecCross(v1, v2) {
-    return new Vector3(v1.z * v2.y - v1.y * v2.z, v1.x * v2.z - v1.z * v2.x, v1.y * v2.x - v1.x * v2.y);
+    return new Vector3(v1.y * v2.z - v1.z * v2.y, v1.z * v2.x - v1.x * v2.z, v1.x * v2.y - v1.y * v2.x);
 }
 
 function Normalize(v) {
@@ -130,7 +183,13 @@ function AddTriangle(x0, y0, x1, y1, x2, y2) {
     AddLine(x2, y2, x0, y0);
 }
 
-function FillTriangle(x0, y0, x1, y1, x2, y2) {
+function FillTriangle(a, b, c) {
+    let x0 = a.x;
+    let x1 = b.x;
+    let x2 = c.x;
+    let y0 = a.y;
+    let y1 = b.y;
+    let y2 = c.y;
     if (x0 == x1 && x0 == x2) {
         return;
     }
@@ -165,7 +224,16 @@ function FillTriangle(x0, y0, x1, y1, x2, y2) {
             [xFrom, xTo] = [xTo, xFrom];
         }
         for (let x = xFrom; x <= xTo; x++) {
-            drawer.AddPoint(x, y);          
+            let bary = Barycentric(a, b, c, new Vector3(x, y, 0));
+            if (bary == null) {
+                continue;
+            }
+            let pz = a.z * bary[0] + b.z * bary[1] + c.z * bary[2];
+            let index = y * WIDTH + x;
+            if (pz > zBuffer[index]) {
+                drawer.AddPoint(x, y);
+                zBuffer[index] = pz;
+            }        
         }
 
         if (y >= y2) {
@@ -178,6 +246,22 @@ function FillTriangle(x0, y0, x1, y1, x2, y2) {
         }
         else {
             xC += ctgC;
+        }
+    }
+}
+
+function FillTriangleBary(a, b, c) {
+    let minX = Math.min(a.x, b.x, c.x);
+    let maxX = Math.max(a.x, b.x, c.x);
+    let minY = Math.min(a.y, b.y, c.y);
+    let maxY = Math.max(a.y, b.y, c.y);
+
+    for (let y = minY; y <= maxY; y++) {
+        for (let x = minX; x <= maxX; x++) {
+            let bary = Barycentric(a, b, c, new Vector3(x, y, 0));
+            if (bary[0] > 0 && bary[1] > 0 && bary[2] > 0) {
+                drawer.AddPoint(x, y);
+            }            
         }
     }
 }
